@@ -1,66 +1,74 @@
 --Question 1
-select first_name, last_name
-from customer
-where last_name LIKE 'T%'
-ORDER BY first_name ASC;
+ALTER TABLE rental
+add status varchar(255);
+update rental
+set status = CASE
+when (return_date-rental_date) > interval '7 days' then 'late'
+when (return_date-rental_date) = interval '7 days' then 'on time'
+else 'early'
+END;
+select * from rental;
+--Question 2
+select sum(p.amount)
+from payment p
+left join customer c on p.customer_id = c.customer_id
+left join address a on c.address_id = a.address_id
+left join city t on a.city_id = t.city_id
+where t.city in ('Kansas City','Saint Louis');
 
--- Question 2
-select *
-from rental
-WHERE rental_date BETWEEN '2005-05-8' AND '2005-06-01';
 
 --Question 3
--- For this question, to find which movies are rented the most you would use rental and film because you need to join both queries to get the answer.
-select f.title, count(r.rental_id) as rental_count
-from film f
-join inventory i on i.film_id = f.film_id
-join rental r on r.inventory_id = i.inventory_id
-group by f.title
-order by rental_count DESC
-limit 10;
+select category.name, count(film.film_id) as film_count
+from category 
+join film_category on category.category_id=film_category.category_id
+join film on film_category.film_id=film.film_id
+group by category.name
+order by film_count DESC;
 
 --Question 4
-select c.customer_id, c.first_name, c.last_name, sum(p.amount) as total_spent
-from customer c
-join payment p on c.customer_id = p.customer_id
-group by c.customer_id, c.first_name, c.last_name
-order by total_spent ASC;
+-- Category and film category are two different tables probably so that category can define all the different genres for movies
+-- and the film category table can take the films in the film table and allocate them to categories
+--the reason they are separate is because one movie might fall into multiple categories ex: a romantic comedy film
 
 --Question 5
-select a.first_name, a.last_name as actor_name, count(f.film_id) as movie_count
-from actor a
-join film_actor fa on a.actor_id = fa.actor_id
-join film f on fa.film_id = f.film_id
-where f.release_year = 2006
-group by a.actor_id, a.first_name, a.last_name
-order by movie_count DESC;
+select film.film_id, film.title, film.length
+from rental
+join inventory on rental.inventory_id=inventory.inventory_id
+join film on inventory.film_id=film.film_id
+where rental.return_date between '2005-05-15' and '2005-05-31';
 
 --Question 6
--- For Question 4 and 5, the queries follow a plan where we join multiple queries together in order to filter answers from multiple queries.
--- In Question 4, we have to combine the customer and the payment query in order to name which customers spent how much. After joining them, the query groups people by their id and name. 
---Then it scans all the customers in the customer query and filters them to be in a descending order meaning the top will be the customer with the highest payment and so forth. 
---It is important to account p.amount as something else otherwise there will be an error because it isn't in the group by statement and the query won't run.
-
---For Question 5, if we want to find the actor in the most movies in 2006, we have to join the actor, film actor, and film queries in order to access the actor names, the movies, and the movie count
---Then, the where clause will filter all the films to the ones that are from 2006, and then by grouping by actors that are also connected to films, it will count all the movies that each actor is in.
--- By putting it in a descending order, it starts from the highest movie count to the lowest, which will give the correct formatting of list.
+select film.title, film.rental_rate
+from film 
+where film.rental_rate < (select avg(rental_rate) from film);
 
 --Question 7
-select c.name , avg(f.rental_rate)
-from film f
-join film_category fc on f.film_id = fc.film_id
-join category c on fc.category_id = c.category_id
-group by c.name
-order by c.name;
+select status, count(*) as film_num
+from rental
+group by status;
 
 --Question 8
-select c.category_id, c.name as category_name, COUNT(8) as total_rentals
-from rental r
-join inventory i on r.inventory_id = i.inventory_id
-join film f on i.film_id = f.film_id
-join film_category fc on f.film_id = fc.film_id
-join category c on fc.category_id = c.category_id
-group by c.category_id, c.name
-order by total_rentals DESC
-limit 5;
+select film.title, film.length,
+percent_rank() over (order by film.length)
+	as percentile_rank
+from film
+where film.length IS NOT NULL;
 
+--Question 9
+explain
+select film.film_id,film.title, rental.rental_date
+from film
+join inventory on film.film_id=inventory.film_id
+join rental on inventory.inventory_id=rental.inventory_id
+where rental.customer_id=87;
+
+explain
+select film.title, count(rental.rental_id) as rental_count
+from film 
+join inventory on film.film_id = inventory.film_id
+join rental on inventory.inventory_id=rental.inventory_id
+GROUP BY film.title;
+
+--both queries need to join tables in order to run and be able to extract information from the tables that are selected
+--but the first query is searching for the options that connect with customer number 87 which is a more specific request
+--than just counting the rentals for films so the explain feature shows more steps for the first query
